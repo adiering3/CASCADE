@@ -1,0 +1,31 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: CASCADE
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Abigail
+    family-names: Bonde
+    email: adiering3@gatech.edu
+    affiliation: Georgia Institute of Technology
+    orcid: 'https://orcid.org/0000-0001-5018-2082'
+  - given-names: Eric
+    family-names: Baker
+    orcid: 'https://orcid.org/0009-0009-9529-2344'
+  - given-names: Marcus
+    family-names: Cicerone
+    email: cicerone@gatech.edu
+    affiliation: Georgia Institute of Technology
+    orcid: 'https://orcid.org/0000-0002-2718-6533'
+repository-code: 'https://github.com/abbybonde/CASCADE.git'
+keywords:
+  - CWT
+  - Adam
+  - Gradient Descent
+  - Raman
+  - Peak Fitting
+license: BSD-3-Clause

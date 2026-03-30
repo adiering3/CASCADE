@@ -52,20 +52,6 @@ Install with:
 ```bash
 pip install numpy torch scipy h5py lazy5 matplotlib pandas
 ```
-
-### Optional (not included in this repository)
-
-The following modules are only needed for specific advanced features. CASCADE works fully without them.
-
-| Module | Required for |
-|--------|-------------|
-| `mswt_peak_priors` | `RamanDataset(return_priors=True)` — ridge and signed-pair prior maps |
-| `model_defs` | `RamanDataset(return_pipeline_estimates=True)` — neural network pipeline |
-| `post_UNet_utils` | Same as above — post-processing for UNet predictions |
-| `utils_wavelet_geometry` | Same as above — wavelet shape map generation |
-
-These are imported lazily inside specific methods so missing them will only raise an `ImportError` when the relevant feature is actually used.
-
 ---
 
 ## Quick Start

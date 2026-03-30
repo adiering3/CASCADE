@@ -2,6 +2,9 @@ from math import gamma
 
 import numpy as np
 import torch
+import h5py
+import lazy5
+from lazy5.inspect import get_datasets, get_attrs_dset
 from torch.utils.data import Dataset
 
 
@@ -10,6 +13,212 @@ try:
 except Exception as e:
     wofz = None
 
+
+import os
+
+
+def load_h5_file(filename, galvo=True, data_path=None, nrb_path=None, dark_path=None):
+    """Load BCARS hyperspectral data from an HDF5 file.
+
+    Parameters
+    ----------
+    filename  : path to the .h5 file
+    galvo     : unused flag kept for API compatibility
+    data_path : explicit dataset path for data. If None, tries known paths then
+                auto-detects the first 3-D dataset in the file.
+    nrb_path  : explicit dataset path for NRB. If None, tries known paths then
+                falls back to a vector of ones.
+    dark_path : explicit dataset path for dark frame. If None, tries known paths
+                then returns None if not found.
+
+    Returns
+    -------
+    data, nrb, dark, attrs
+      dark is None if no dark frame was found.
+    """
+    _DATA_CANDIDATES = [
+        '/raw_data/hyperspectral_image_0000',
+        '/preprocessed_images/medfilter_raw',
+        '/preprocessed_images/medfilter_ratio_SVD_KK_PhaseErrorCorrectALS_ScaleErrorCorrectSG',
+        '/preprocessed_images/ratio_SVD_KK_PhaseErrorCorrectALS',
+        '/preprocessed_images/medfilter_ratio',
+        '/preprocessed_images/ratio',
+    ]
+    _NRB_CANDIDATES = [
+        '/preprocessed_images/medfilter_nrb_for_ratio',
+        '/preprocessed_images/nrb',
+        '/nrb',
+    ]
+    _DARK_CANDIDATES = [
+        '/raw_data/dark_image_pre',
+        '/raw_data/dark_image_post',
+        '/raw_data/dark',
+        '/dark',
+    ]
+
+    data, nrb, dark, attrs = None, None, None, None
+    found_data_path = None
+
+    with h5py.File(filename, "r") as f:
+        all_datasets = get_datasets(f)
+        print("Available datasets:", all_datasets)
+
+        # ── Data ──────────────────────────────────────────────────────────────
+        if data_path is not None:
+            if data_path not in f:
+                raise KeyError(
+                    f"data_path '{data_path}' not found.\n"
+                    f"Available datasets: {all_datasets}"
+                )
+            found_data_path = data_path
+        else:
+            for path in _DATA_CANDIDATES:
+                if path in f:
+                    found_data_path = path
+                    break
+
+            if found_data_path is None:
+                # Auto-detect: pick the first dataset with 3+ dimensions
+                for path in all_datasets:
+                    if path in f and len(f[path].shape) >= 3:
+                        found_data_path = path
+                        print(f"Auto-detected data at: {path} — pass data_path='{path}' to suppress this message")
+                        break
+
+            if found_data_path is None:
+                raise KeyError(
+                    "Could not find a suitable data dataset.\n"
+                    f"Available datasets: {all_datasets}\n"
+                    "Pass data_path= to specify one explicitly."
+                )
+
+        data = np.array(f[found_data_path])
+        print(f"Data   loaded from: {found_data_path}  shape: {data.shape}")
+
+        # ── NRB ───────────────────────────────────────────────────────────────
+        found_nrb_path = nrb_path
+        if found_nrb_path is not None:
+            if found_nrb_path not in f:
+                raise KeyError(
+                    f"nrb_path '{found_nrb_path}' not found.\n"
+                    f"Available datasets: {all_datasets}"
+                )
+        else:
+            for path in _NRB_CANDIDATES:
+                if path in f:
+                    found_nrb_path = path
+                    break
+
+        if found_nrb_path is not None:
+            nrb = np.array(f[found_nrb_path])
+            print(f"NRB    loaded from: {found_nrb_path}  shape: {nrb.shape}")
+        else:
+            nrb = np.ones(data.shape[-1])
+            print(f"NRB not found — using ones  shape: {nrb.shape}")
+
+        # ── Dark ──────────────────────────────────────────────────────────────
+        found_dark_path = dark_path
+        if found_dark_path is not None:
+            if found_dark_path not in f:
+                raise KeyError(
+                    f"dark_path '{found_dark_path}' not found.\n"
+                    f"Available datasets: {all_datasets}"
+                )
+        else:
+            for path in _DARK_CANDIDATES:
+                if path in f:
+                    found_dark_path = path
+                    break
+
+        if found_dark_path is not None:
+            dark = np.array(f[found_dark_path])
+            print(f"Dark   loaded from: {found_dark_path}  shape: {dark.shape}")
+        else:
+            print("Dark not found — dark=None")
+
+        # ── Attributes ────────────────────────────────────────────────────────
+        attrs = get_attrs_dset(filename, found_data_path)
+        print(f"Attrs  loaded from: {found_data_path}")
+
+    return data, nrb, dark, attrs
+
+
+def save_h5_file(
+    filename,
+    SAVE_FOLDER,
+    attrs=None,
+    data=None,
+    original=None,
+    nrb=None,
+    dark=None,
+    model=None,
+    peak_params=None,
+    x_axis=None,
+):
+    """
+    Save BCARS fit results to an HDF5 file using lazy5.
+
+    Parameters
+    ----------
+    filename : str
+        Base filename for the output HDF5 file.
+    SAVE_FOLDER : str
+        Folder where the file will be saved.
+    attrs : dict, optional
+        Attribute dictionary to write to saved datasets.
+    data : array-like, optional
+        Raw/original data cube. If None, `original` will be used.
+    original : array-like, optional
+        Alternative name for raw/original data, matching np.savez usage.
+    nrb : array-like, optional
+        NRB dataset.
+    dark : array-like, optional
+        Dark dataset.
+    model : array-like, optional
+        Fitted model data.
+    peak_params : array-like, optional
+        Peak parameter array.
+    x_axis : array-like, optional
+        Spectral axis / x-axis values.
+    """
+
+    if attrs is None:
+        attrs = {}
+
+    # Let `original` behave like the raw data input from np.savez_compressed
+    raw_data = data if data is not None else original
+
+    out_file = f"fitted_{filename}"
+    fid = os.path.join(SAVE_FOLDER, out_file)
+
+    first_write = True
+
+    def _save_dataset(dset_name, arr, dtype=None):
+        nonlocal first_write
+        if arr is None:
+            return
+
+        arr_np = np.asarray(arr, dtype=dtype) if dtype is not None else np.asarray(arr)
+
+        lazy5.create.save(
+            file=out_file,
+            pth=SAVE_FOLDER,
+            dset=dset_name,
+            data=arr_np,
+            mode='w' if first_write else 'a'
+        )
+        first_write = False
+
+        if attrs:
+            lazy5.alter.write_attr_dict(dset=dset_name, attr_dict=attrs, fid=fid)
+
+    # Save datasets
+    _save_dataset('preprocessed_images/raw', raw_data, dtype=np.uint16)
+    _save_dataset('preprocessed_images/nrb', nrb, dtype=np.uint16)
+    _save_dataset('preprocessed_images/dark', dark, dtype=np.uint16)
+    _save_dataset('preprocessed_images/model', model, dtype=np.float32)
+    _save_dataset('preprocessed_images/peak_params', peak_params)   # keep native dtype unless you want otherwise
+    _save_dataset('preprocessed_images/x_axis', x_axis, dtype=np.float32)
 
 def voigt_peak(x, center, amp, sigma, gamma=5.0, Real=False):
     if wofz is None:

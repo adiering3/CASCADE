@@ -99,7 +99,7 @@ class HandlerRainbowLine(HandlerBase):
         return lines
 
         
-def plot_voigt_fit_res(x, y_true, params, peaks_dict=None, title='Voigt Fit Breakdown'):
+def plot_voigt_fit_res(x, y_true, params, peaks_dict=None, title=None):
     """Plot a Voigt peak decomposition with a residual panel.
 
     Draws:
@@ -164,7 +164,7 @@ def plot_voigt_fit_res(x, y_true, params, peaks_dict=None, title='Voigt Fit Brea
     r2 = 1 - np.sum(residual**2) / np.sum((y_true - np.mean(y_true))**2)
     
     ax1.set_ylabel("Intensity", fontsize=12)
-    ax1.set_title(f"Voigt Fit\n (n={n_pos_peaks})", fontsize=14)
+    ax1.set_title(f"{title} (n={n_pos_peaks})", fontsize=14)
     
     # Residual plot
     ax2.plot(x, residual, 'gray', lw=1)

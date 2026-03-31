@@ -467,13 +467,27 @@ def residual_projected(p, x, y):
 _LO = None
 _HI = None
 @torch.compile(fullgraph=True)
-def project_bounds(p, x, fwhm_exp=None, fwhm_max_scale=None, hyperparams=None):
+def project_bounds(p, x, spectrum, fwhm_exp=None, fwhm_max_scale=None, hyperparams=None):
     global _LO, _HI
     if _LO is None or _LO.device != p.device:
         _LO = torch.tensor([0.0, 0.0, 0.05, 0.05], device=p.device)
         _HI = torch.tensor([1.0, 4000.0, 50.0, 50.0], device=p.device)
     p_r = p.reshape(-1, 4)
-    result = torch.clamp(p_r, _LO, _HI)
+
+    # Build per-peak upper bounds: amplitude cap = spectrum value at peak center + 10%
+    hi = _HI.unsqueeze(0).expand_as(p_r).clone()  # (N, 4)
+    low = _LO.unsqueeze(0).expand_as(p_r).clone()         # (N, 4)
+    centers = p_r[:, 1]  # peak center positions (x-axis)
+
+    # Find nearest x index for each peak center
+    # x is assumed to be a 1D tensor of the spectral axis
+    indices = torch.argmin(torch.abs(x.unsqueeze(0) - centers.unsqueeze(1)), dim=1)
+    amp_caps = spectrum[indices]  
+
+    hi[:, 0] = amp_caps * 1.1 
+    hi[:,1] = centers * 1.1
+    low[:,1] = centers * 0.9
+    result = torch.clamp(p_r, low, hi)
     result = torch.where(torch.isfinite(result), result, p_r)
     return result.reshape(-1)
 

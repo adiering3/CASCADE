@@ -139,11 +139,9 @@ def lorentz4_multiscale_transform(
     expects a 3-D (n_sigmas, n_gammas, n_pts) response tensor.
     """
     signal_fft   = torch.fft.fft(signal)                         # (n_pts,)
-    wavelets_fft = torch.fft.fft(precomputed_wavelets)           # (n_widths, n_pts)
-
-    cross     = torch.fft.ifft(signal_fft.unsqueeze(0) * wavelets_fft.conj())
-    responses = torch.fft.fftshift(cross.real, dim=-1)           # (n_widths, n_pts)
-
+    wavelets_fft = torch.fft.fft(torch.fft.ifftshift(precomputed_wavelets, dim=-1))
+    cross = torch.fft.ifft(signal_fft.unsqueeze(0) * wavelets_fft.conj())
+    responses = cross.real  # no fftshift
     energy    = (precomputed_wavelets**2).sum(dim=1, keepdim=True) + 1e-12
     responses = responses / energy                                # (n_widths, n_pts)
 
@@ -390,11 +388,9 @@ def voigt_multiscale_transform(
     signal_fft    = torch.fft.fft(signal)                          # (n_pts,)
 
     wavelets_flat = precomputed_wavelets.reshape(-1, n_pts)
-    wavelets_fft  = torch.fft.fft(wavelets_flat)                   # (n_scales, n_pts)
-
-    cross     = torch.fft.ifft(signal_fft.unsqueeze(0) * wavelets_fft.conj())
-    responses = torch.fft.fftshift(cross.real, dim=-1)             # (n_scales, n_pts)
-
+    wavelets_fft = torch.fft.fft(torch.fft.ifftshift(wavelets_flat, dim=-1))
+    cross = torch.fft.ifft(signal_fft.unsqueeze(0) * wavelets_fft.conj())
+    responses = cross.real  # no fftshift needed now
     energy    = (wavelets_flat ** 2).sum(dim=1, keepdim=True) + 1e-12
     responses = (responses / energy).reshape(n_sigmas, n_gammas, n_pts)
 
@@ -786,7 +782,7 @@ def process_conv_deriv_fit(
     max_peaks: int = 200,
     max_iter: int = 5000,
     tol: float = 1e-8,
-    convolution: str = 'voigt',
+    convolution: str = 'Lor4',
     amp_threshold: float = 1e-3,
     min_height: float = 0.0,
     min_spacing: float = 0.0,

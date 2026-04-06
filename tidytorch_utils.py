@@ -705,7 +705,8 @@ def process_pixel_fit(
     max_iter: int = 5000,
     tol: float = 1e-8,
     convolution: str = 'voigt',
-    min_spacing: float = 0.0,
+    min_spacing_in: float = 0.0,
+    min_spacing_post: float = 0.0,
     scale_preference_fraction: float = 0.8,
 ) -> Tuple[torch.Tensor, bool, int]:
     """
@@ -750,7 +751,7 @@ def process_pixel_fit(
     peak_mask = find_peaks_derivative_mask(x, spectrum, min_height=response_threshold)
     p0        = build_initial_guesses_from_derivative_mask(
         response_tensor, sigmas, gammas, x, spectrum, peak_mask, max_peaks,
-        min_spacing=min_spacing,
+        min_spacing=min_spacing_in,
         scale_preference_fraction=scale_preference_fraction,
     )
 
@@ -758,7 +759,7 @@ def process_pixel_fit(
         y=spectrum, x=x, p0_stack=p0, max_iter=max_iter, tol=tol
     )
     params = prune_peaks(params, amp_threshold=1e-3)
-    params = deduplicate_peaks(params, min_spacing)
+    params = deduplicate_peaks(params, min_spacing_post)
 
     if not is_valid:
         params = torch.zeros_like(params)
@@ -785,7 +786,8 @@ def process_conv_deriv_fit(
     convolution: str = 'Lor4',
     amp_threshold: float = 1e-3,
     min_height: float = 0.0,
-    min_spacing: float = 0.0,
+    min_spacing_in: float = 0.0,
+    min_spacing_post: float = 0.0,
     scale_preference_fraction: float = 0.8,
 ) -> Tuple[torch.Tensor, bool, int, torch.Tensor, torch.Tensor, torch.Tensor]:
     """
@@ -875,7 +877,7 @@ def process_conv_deriv_fit(
     # ---- 4. Build initial guesses (same logic as process_pixel_fit) -------
     p0 = build_initial_guesses_from_derivative_mask(
         response_tensor, sigmas, gammas, x, spectrum, peak_mask, max_peaks,
-        min_spacing=min_spacing,
+        min_spacing=min_spacing_in,
         scale_preference_fraction=scale_preference_fraction,
     )
 
@@ -884,7 +886,7 @@ def process_conv_deriv_fit(
         y=spectrum, x=x, p0_stack=p0, max_iter=max_iter, tol=tol
     )
     params = prune_peaks(params, amp_threshold=amp_threshold)
-    params = deduplicate_peaks(params, min_spacing)
+    params = deduplicate_peaks(params, min_spacing_post)
 
     if not is_valid:
         params = torch.zeros_like(params)
@@ -905,8 +907,8 @@ def process_in_batches_adam(
     batch_size: int = 50,
     response_threshold: float = 0.0001,
     max_peaks: int = 200,
-    min_spacing_fraction: float = 0.002,   # kept for API compatibility; unused
-    min_spacing_exp: float = 1.25,          # kept for API compatibility; unused
+    min_spacing_in: float = 0.0,   # kept for API compatibility; unused
+    min_spacing_post: float = 0.0,          # kept for API compatibility; unused
     max_iter: int = 5000,
     tol: float = 1e-8,
 ):
@@ -952,6 +954,8 @@ def process_in_batches_adam(
                 spec, x_t, sigmas_t, gammas_t, wavelet_peaks,
                 response_threshold=response_threshold,
                 max_peaks=max_peaks,
+                min_spacing_in=min_spacing_in,
+                min_psacing_post = min_spacing_post,
                 max_iter=max_iter,
                 tol=tol,
             )
